@@ -120,12 +120,13 @@ If Git is not installed, download the repository ZIP, extract it to `C:\Crucix`,
 1. Install the IIS **URL Rewrite** module and **Application Request Routing (ARR)** on the server. In IIS Manager, select the server, open **Application Request Routing Cache** → **Server Proxy Settings**, enable **Enable Proxy**, and apply the change.
 2. Create or configure an IIS website with its physical path set to `C:\Crucix`. The root `web.config` in this repository forwards requests to `http://127.0.0.1:3117`; keep it in the site's physical root. If you change Crucix's `PORT` from `3117`, update the port in `web.config` to match.
 3. Add the site's HTTP/HTTPS bindings in IIS and configure an HTTPS certificate for public access. Allow inbound web traffic to IIS (ports 80/443 as appropriate); do not expose Node's port 3117 directly to the internet.
-4. Keep the Node process running independently of IIS. For a basic setup, create a Windows Task Scheduler task triggered **At startup**, configured to run whether the user is logged on or not:
+4. In `C:\Crucix\.env`, set `AUTO_OPEN_BROWSER=false` for server deployments and keep `TRUST_PROXY=true` when running behind IIS/ARR.
+5. Keep the Node process running independently of IIS. For a basic setup, create a Windows Task Scheduler task triggered **At startup**, configured to run whether the user is logged on or not:
    - **Program/script:** the path to `node.exe` (for example, `C:\Program Files\nodejs\node.exe`)
    - **Add arguments:** `C:\Crucix\server.mjs`
    - **Start in:** `C:\Crucix`
    Run the task as an account that can read `.env` and the application files and can write to `C:\Crucix\runs`. Configure the task to restart the program if it fails.
-5. Browse to the IIS site's URL and verify the dashboard and live updates load. The `/events` endpoint uses Server-Sent Events (SSE), which must pass through the ARR reverse proxy.
+6. Browse to the IIS site's URL and verify the dashboard and live updates load. The `/events` endpoint uses Server-Sent Events (SSE), which must pass through the ARR reverse proxy.
 
 IIS handles the public HTTP/HTTPS connection; Node serves the application behind it. PHP and MariaDB are not involved in this deployment.
 
@@ -449,6 +450,8 @@ All settings are in `.env` with sensible defaults:
 |----------|---------|-------------|
 | `PORT` | `3117` | Dashboard server port |
 | `REFRESH_INTERVAL_MINUTES` | `15` | Auto-refresh interval |
+| `TRUST_PROXY` | `true` | Trust reverse-proxy headers (recommended for IIS/ARR) |
+| `AUTO_OPEN_BROWSER` | `true` | Auto-open dashboard on startup (`false` for IIS/servers) |
 | `LLM_PROVIDER` | disabled | `anthropic`, `openai`, `gemini`, `codex`, `openrouter`, `minimax`, `mistral`, or `grok` |
 | `LLM_API_KEY` | — | API key (not needed for codex) |
 | `LLM_MODEL` | per-provider default | Override model selection |

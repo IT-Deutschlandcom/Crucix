@@ -33,7 +33,7 @@ let lastSweepTime = null;  // Timestamp of last sweep
 let sweepStartedAt = null; // Timestamp when current/last sweep started
 let sweepInProgress = false;
 const startTime = Date.now();
-const sseClients = new Set();
+const sseClients = new Map();
 
 // === Delta/Memory ===
 const memory = new MemoryManager(RUNS_DIR);
@@ -234,6 +234,7 @@ if (discordAlerter.isConfigured) {
 
 // === Express Server ===
 const app = express();
+app.set('trust proxy', config.trustProxy);
 app.use(express.static(join(ROOT, 'dashboard/public')));
 
 // Serve loading page until first sweep completes, then the dashboard with injected locale
@@ -295,16 +296,34 @@ app.get('/events', (req, res) => {
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
     'Access-Control-Allow-Origin': '*',
+    'X-Accel-Buffering': 'no',
   });
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  res.write('retry: 10000\n');
   res.write('data: {"type":"connected"}\n\n');
-  sseClients.add(res);
-  req.on('close', () => sseClients.delete(res));
+
+  // Keep the stream active across reverse proxies that close idle HTTP connections.
+  const keepAliveTimer = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch {}
+  }, 25000);
+
+  sseClients.set(res, keepAliveTimer);
+  req.on('close', () => {
+    const timer = sseClients.get(res);
+    if (timer) clearInterval(timer);
+    sseClients.delete(res);
+  });
 });
 
 function broadcast(data) {
   const msg = `data: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try { client.write(msg); } catch { sseClients.delete(client); }
+  for (const [client, timer] of sseClients) {
+    try {
+      client.write(msg);
+    } catch {
+      clearInterval(timer);
+      sseClients.delete(client);
+    }
   }
 }
 
@@ -445,9 +464,13 @@ async function start() {
     // We must use `cmd /c start ""` to ensure it works in both cmd.exe and PowerShell.
     const openCmd = process.platform === 'win32' ? 'cmd /c start ""' :
                     process.platform === 'darwin' ? 'open' : 'xdg-open';
-    exec(`${openCmd} "http://localhost:${port}"`, (err) => {
-      if (err) console.log('[Crucix] Could not auto-open browser:', err.message);
-    });
+    if (config.autoOpenBrowser) {
+      exec(`${openCmd} "http://localhost:${port}"`, (err) => {
+        if (err) console.log('[Crucix] Could not auto-open browser:', err.message);
+      });
+    } else {
+      console.log('[Crucix] AUTO_OPEN_BROWSER=false — skipping browser launch');
+    }
 
     // Try to load existing data first for instant display (await so dashboard shows immediately)
     try {

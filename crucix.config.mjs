@@ -2,10 +2,17 @@
 
 import "./apis/utils/env.mjs"; // Load .env first
 
+function parseBool(value, defaultValue = false) {
+  if (value == null || value === '') return defaultValue;
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
+}
+
 export default {
   port: parseInt(process.env.PORT) || 3117,
   publicUrl: process.env.PUBLIC_URL || null,
   refreshIntervalMinutes: parseInt(process.env.REFRESH_INTERVAL_MINUTES) || 15,
+  trustProxy: parseBool(process.env.TRUST_PROXY, true),
+  autoOpenBrowser: parseBool(process.env.AUTO_OPEN_BROWSER, true),
 
   llm: {
     provider: process.env.LLM_PROVIDER || null, // anthropic | openai | gemini | codex | openrouter | minimax | mistral | ollama | grok
